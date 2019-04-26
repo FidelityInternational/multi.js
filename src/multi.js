@@ -160,8 +160,8 @@ var multi = (function() {
     select.wrapper.selected.innerHTML = "";
     select.wrapper.non_selected.innerHTML = "";
 
-    selected_order_list = get_order_list(settings);
     if (settings.ordering) {
+      selected_order_list = get_order_list(settings);
       for (var i = 0; i < select.options.length; i++) {
         if (select.options[i].selected) {
           opt = select.options[i];
@@ -226,15 +226,17 @@ var multi = (function() {
         ) {
           row.className += " highlight";
         }
-        currentSortIndex = option.getAttribute("sort-order");
-        if (currentSortIndex == null) {
-          currentSortIndex = selected_order_list.length - 1;
-          option.setAttribute("sort-order", currentSortIndex);
+        if (settings.ordering) {
+            currentSortIndex = option.getAttribute("sort-order");
+            if (currentSortIndex == null) {
+              currentSortIndex = selected_order_list.length - 1;
+              option.setAttribute("sort-order", currentSortIndex);
+            }
+            row.setAttribute("sort-order", currentSortIndex);
         }
-        row.setAttribute("sort-order", currentSortIndex);
         var clone = row.cloneNode(true);
         select.wrapper.selected.appendChild(clone);
-      } else {
+      } else if (settings.ordering) {
         currentSortIndex = option.getAttribute("sort-order");
         if (currentSortIndex != null) {
           option.removeAttribute("sort-order");
