@@ -4,9 +4,32 @@
  *
  * Author: Fabian Lindfors
  * License: MIT
+ *
+ * Modified by Simon Carter on 25/4/2019 - Added ability to order selected items
+ *
  */
 var multi = (function() {
   var disabled_limit = false; // This will prevent to reset the "disabled" because of the limit at every click
+  var selected_count = 0;
+  var highlighted_option_obj = null;
+
+  // Helper function to move an item in an Array
+  var array_move = function(arr, old_index, new_index) {
+    while (old_index < 0) {
+      old_index += arr.length;
+    }
+    while (new_index < 0) {
+      new_index += arr.length;
+    }
+    if (new_index >= arr.length) {
+      let k = new_index - arr.length;
+      while (k-- + 1) {
+        arr.push(undefined);
+      }
+    }
+    arr.splice(new_index, 0, arr.splice(old_index, 1)[0]);
+    return arr;
+  };
 
   // Helper function to trigger an event on an element
   var trigger_event = function(type, el) {
@@ -29,7 +52,6 @@ var multi = (function() {
     var limit = settings.limit;
     if (limit > -1) {
       // Count current selected
-      var selected_count = 0;
       for (var i = 0; i < select.options.length; i++) {
         if (select.options[i].selected) {
           selected_count++;
@@ -67,6 +89,68 @@ var multi = (function() {
       }
     }
 
+    // Add new item to ordered list
+    if (settings.ordering) {
+      value = option.getAttribute("value");
+      new_list = get_order_list(settings);
+      new_list.push(value);
+      set_order_list(settings, new_list);
+    }
+
+    trigger_event("change", select);
+  };
+
+  var get_order_list = function(settings) {
+    current_list = settings.selected_order_list[0].value;
+    return settings.ordering && current_list != ""
+      ? current_list.split(",").map(s => s.trim())
+      : [];
+  };
+
+  var set_order_list = function(settings, order_list) {
+    settings.selected_order_list[0].value = order_list.join(",");
+  };
+
+  // Move a highlighted option
+  var item_move = function(select, direction, settings) {
+    value = highlighted_option_obj.getAttribute("value");
+    selected_order_list = get_order_list(settings);
+    current_position = selected_order_list.indexOf(value);
+    new_index = current_position - direction;
+    // Update order if not at the ends
+    if (new_index > -1 && new_index < selected_order_list.length) {
+      new_order = array_move(selected_order_list, current_position, new_index);
+      set_order_list(settings, new_order);
+    }
+    trigger_event("change", select);
+  };
+
+  // Deselect the highlighted option
+  var item_remove = function(select, settings) {
+    highlighted_option_obj.selected = false;
+    value = highlighted_option_obj.getAttribute("value");
+    selected_order_list = get_order_list(settings);
+    current_position = selected_order_list.indexOf(value);
+    selected_order_list.splice(current_position, 1);
+    set_order_list(settings, selected_order_list);
+    trigger_event("change", select);
+  };
+
+  var highlight_option = function(row, enabled) {
+    if (!row) {
+      return;
+    }
+    highlight = row.classList.contains("highlight");
+    if (highlight && !enabled) {
+      row.classList.remove("highlight");
+    } else if (!highlight && enabled) {
+      row.classList.add("highlight");
+    }
+  };
+
+  var select_option = function(select, event, settings) {
+    var option = select.options[event.target.getAttribute("multi-index")];
+    highlighted_option_obj = option;
     trigger_event("change", select);
   };
 
@@ -75,6 +159,20 @@ var multi = (function() {
     // Clear columns
     select.wrapper.selected.innerHTML = "";
     select.wrapper.non_selected.innerHTML = "";
+
+    if (settings.ordering) {
+      selected_order_list = get_order_list(settings);
+      for (var i = 0; i < select.options.length; i++) {
+        if (select.options[i].selected) {
+          opt = select.options[i];
+          value = opt.getAttribute("value");
+          position = selected_order_list.indexOf(value);
+          if (position != -1) {
+            opt.setAttribute("sort-order", position);
+          }
+        }
+      }
+    }
 
     // Add headers to columns
     if (settings.non_selected_header && settings.selected_header) {
@@ -122,9 +220,30 @@ var multi = (function() {
       // Add row to selected column if option selected
       if (option.selected) {
         row.className += " selected";
+        if (
+          highlighted_option_obj &&
+          option.value == highlighted_option_obj.value
+        ) {
+          row.className += " highlight";
+        }
+        if (settings.ordering) {
+            currentSortIndex = option.getAttribute("sort-order");
+            if (currentSortIndex == null) {
+              currentSortIndex = selected_order_list.length - 1;
+              option.setAttribute("sort-order", currentSortIndex);
+            }
+            row.setAttribute("sort-order", currentSortIndex);
+        }
         var clone = row.cloneNode(true);
         select.wrapper.selected.appendChild(clone);
+      } else if (settings.ordering) {
+        currentSortIndex = option.getAttribute("sort-order");
+        if (currentSortIndex != null) {
+          option.removeAttribute("sort-order");
+        }
       }
+
+      // *** Need to reset indexes after removal
 
       // Create group if entering a new optgroup
       if (
@@ -164,6 +283,33 @@ var multi = (function() {
         }
       }
     }
+
+    // Sort selected items
+    var items = select.wrapper.selected.querySelectorAll(".item");
+    [].slice
+      .call(items)
+      .sort(function(a, b) {
+        var indexA = a.getAttribute("sort-order");
+        var indexB = b.getAttribute("sort-order");
+        return indexA < indexB ? -1 : indexA > indexB ? 1 : 0;
+      })
+      .forEach(function(el) {
+        el.parentNode.appendChild(el);
+      });
+
+    // Update ordering button status
+    if (settings.ordering) {
+      select.wrapper.remove_button.disabled = !highlighted_option_obj;
+      select.wrapper.up_button.disabled = !(
+        highlighted_option_obj &&
+        highlighted_option_obj.getAttribute("sort-order") != 0
+      );
+      select.wrapper.down_button.disabled = !(
+        highlighted_option_obj &&
+        highlighted_option_obj.getAttribute("sort-order") !=
+          selected_order_list.length - 1
+      );
+    }
   };
 
   // Intializes and constructs an multi.js instance
@@ -174,6 +320,7 @@ var multi = (function() {
      * Default values:
      * enable_search : true
      * search_placeholder : "Search..."
+     * ordering : false
      */
     settings = typeof settings !== "undefined" ? settings : {};
 
@@ -193,6 +340,10 @@ var multi = (function() {
       typeof settings["selected_header"] !== "undefined"
         ? settings["selected_header"]
         : null;
+    settings["ordering"] =
+      typeof settings["ordering"] !== "undefined"
+        ? settings["ordering"]
+        : false;
     settings["limit"] =
       typeof settings["limit"] !== "undefined"
         ? parseInt(settings["limit"])
@@ -241,13 +392,6 @@ var multi = (function() {
     var selected = document.createElement("div");
     selected.className = "selected-wrapper";
 
-    // Add click handler to toggle the selected status
-    wrapper.addEventListener("click", function(event) {
-      if (event.target.getAttribute("multi-index")) {
-        toggle_option(select, event, settings);
-      }
-    });
-
     // Add keyboard handler to toggle the selected status
     wrapper.addEventListener("keypress", function(event) {
       var is_action_key = event.keyCode === 32 || event.keyCode === 13;
@@ -265,6 +409,66 @@ var multi = (function() {
 
     wrapper.non_selected = non_selected;
     wrapper.selected = selected;
+
+    // Add click handler to toggle the selected status of a non-selected option
+    wrapper.non_selected.addEventListener("click", function(event) {
+      if (event.target.getAttribute("multi-index")) {
+        toggle_option(select, event, settings);
+      }
+    });
+
+    // Add click handler to highlight a selected option if ordering is enabled or toggle select if not
+    wrapper.selected.addEventListener("click", function(event) {
+      if (event.target.getAttribute("multi-index")) {
+        if (settings.ordering) {
+          select_option(select, event, settings);
+        } else {
+          toggle_option(select, event, settings);
+        }
+      }
+    });
+
+    // Add Ordering container and controls if enabled
+    if (settings.ordering) {
+      wrapper.className = wrapper.className + " ordering";
+
+      var ordering = document.createElement("div");
+      ordering.className = "ordering-wrapper";
+
+      var up_button = document.createElement("input");
+      up_button.setAttribute("type", "button");
+      up_button.setAttribute("class", "move-up");
+      up_button.setAttribute("value", "\u2191");
+      up_button.addEventListener("click", function(event) {
+        item_move(select, 1, settings);
+      });
+
+      var down_button = document.createElement("input");
+      down_button.setAttribute("type", "button");
+      down_button.setAttribute("class", "move-down");
+      down_button.setAttribute("value", "\u2193");
+      down_button.addEventListener("click", function(event) {
+        item_move(select, -1, settings);
+      });
+
+      var remove_button = document.createElement("input");
+      remove_button.setAttribute("type", "button");
+      remove_button.setAttribute("class", "remove");
+      remove_button.setAttribute("value", "\u2190");
+      remove_button.addEventListener("click", function(event) {
+        item_remove(select, settings);
+      });
+
+      ordering.appendChild(up_button);
+      ordering.appendChild(remove_button);
+      ordering.appendChild(down_button);
+
+      wrapper.appendChild(ordering);
+      wrapper.ordering = ordering;
+      wrapper.up_button = up_button;
+      wrapper.remove_button = remove_button;
+      wrapper.down_button = down_button;
+    }
 
     select.wrapper = wrapper;
 

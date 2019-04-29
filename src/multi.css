@@ -15,6 +15,11 @@
     width: 50%;
 }
 
+.multi-wrapper.ordering .non-selected-wrapper,
+.multi-wrapper.ordering .selected-wrapper {
+    width:47%;
+}
+
 .multi-wrapper .non-selected-wrapper {
     background: #fafafa;
     border-right: 1px solid #ccc;
@@ -22,6 +27,18 @@
 
 .multi-wrapper .selected-wrapper {
     background: #fff;
+}
+
+.multi-wrapper .ordering-wrapper {
+    width:6%;
+    display: inline-block;
+    position: relative;
+    text-align:center;
+    padding:10px 0;
+}
+
+.multi-wrapper .ordering-wrapper input {
+    margin:10px 0;
 }
 
 .multi-wrapper .header {
@@ -36,6 +53,8 @@
     cursor: pointer;
     display: block;
     padding: 5px 10px;
+    outline:none;
+    border: solid 1px transparent;
 }
 
 .multi-wrapper .item:hover {
@@ -82,3 +101,9 @@
     background: inherit;
     cursor: inherit;
 }
+
+.multi-wrapper .selected-wrapper .item.highlight {
+    background: #ececec;
+    border: solid 1px #ccc;
+}
+
